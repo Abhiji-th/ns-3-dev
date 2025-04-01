@@ -3142,7 +3142,7 @@ TcpSocketBase::AddSocketTags(const Ptr<Packet>& p, bool isEct) const
     else
     {
         if ((m_tcb->m_ecnState != TcpSocketState::ECN_DISABLED && p->GetSize() > 0 && isEct) ||
-            m_tcb->m_ecnMode == TcpSocketState::DctcpEcn)
+            m_tcb->m_ecnMode == TcpSocketState::DctcpEcn || m_tcb->m_ecnMode == TcpSocketState::EcnPlus)
         {
             SocketIpTosTag ipTosTag;
             ipTosTag.SetTos(MarkEcnCodePoint(GetIpTos(), m_tcb->m_ectCodePoint));
@@ -3168,7 +3168,7 @@ TcpSocketBase::AddSocketTags(const Ptr<Packet>& p, bool isEct) const
     else
     {
         if ((m_tcb->m_ecnState != TcpSocketState::ECN_DISABLED && p->GetSize() > 0 && isEct) ||
-            m_tcb->m_ecnMode == TcpSocketState::DctcpEcn)
+            m_tcb->m_ecnMode == TcpSocketState::DctcpEcn || m_tcb->m_ecnMode == TcpSocketState::EcnPlus)
         {
             SocketIpv6TclassTag ipTclassTag;
             ipTclassTag.SetTclass(MarkEcnCodePoint(GetIpv6Tclass(), m_tcb->m_ectCodePoint));
