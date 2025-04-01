@@ -128,6 +128,7 @@ class TcpSocketState : public Object
         ClassicEcn, //!< ECN functionality as described in RFC 3168.
         DctcpEcn,   //!< ECN functionality as described in RFC 8257. Note: this mode is specific to
                     //!< DCTCP.
+        EcnPlus,
     };
 
     /**

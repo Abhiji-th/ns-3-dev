@@ -80,6 +80,15 @@ const std::map<std::pair<ns3::TcpSocketBase::TcpPacketType_t, ns3::TcpSocketStat
         {{ns3::TcpSocketBase::RST, ns3::TcpSocketState::DctcpEcn}, true},
         {{ns3::TcpSocketBase::RE_XMT, ns3::TcpSocketState::DctcpEcn}, true},
         {{ns3::TcpSocketBase::DATA, ns3::TcpSocketState::DctcpEcn}, true},
+
+        {{ns3::TcpSocketBase::SYN, ns3::TcpSocketState::EcnPlus}, true},
+        {{ns3::TcpSocketBase::SYN_ACK, ns3::TcpSocketState::EcnPlus}, true},
+        {{ns3::TcpSocketBase::PURE_ACK, ns3::TcpSocketState::EcnPlus}, true},
+        {{ns3::TcpSocketBase::WINDOW_PROBE, ns3::TcpSocketState::EcnPlus}, true},
+        {{ns3::TcpSocketBase::FIN, ns3::TcpSocketState::EcnPlus}, true},
+        {{ns3::TcpSocketBase::RST, ns3::TcpSocketState::EcnPlus}, true},
+        {{ns3::TcpSocketBase::RE_XMT, ns3::TcpSocketState::EcnPlus}, true},
+        {{ns3::TcpSocketBase::DATA, ns3::TcpSocketState::EcnPlus}, true},
     };
 } // namespace
 
