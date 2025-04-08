@@ -3790,6 +3790,10 @@ TcpSocketBase::EstimateRtt(const TcpHeader& tcpHeader)
 
     if (!rtt.IsZero())
     {
+        if (m_tcb->m_srtt.Get().IsZero()) // Check for initial RTT
+        {
+            NS_LOG_DEBUG("Initial RTT: " << rtt);
+        }
         m_rtt->Measurement(rtt); // Log the measurement
         // RFC 6298, clause 2.4
         m_rto = Max(m_rtt->GetEstimate() + Max(m_clockGranularity, m_rtt->GetVariation() * 4),
