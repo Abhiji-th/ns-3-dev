@@ -2373,7 +2373,19 @@ TcpSocketBase::ProcessSynSent(Ptr<Packet> packet, const TcpHeader& tcpHeader)
         m_txBuffer->SetHeadSequence(m_tcb->m_nextTxSequence);
         // Before sending packets, update the pacing rate based on RTT measurement so far
         UpdatePacingRate();
-        SendEmptyPacket(TcpHeader::ACK);
+
+        if ((m_tcb->m_useEcn != TcpSocketState::Off && m_tcb->m_ecnMode == TcpSocketState::EcnPlus) &&
+            (m_tcb->m_ecnState == TcpSocketState::ECN_CE_RCVD || m_tcb->m_ecnState == TcpSocketState::ECN_SENDING_ECE))
+        {
+                SendEmptyPacket(TcpHeader::ACK | TcpHeader::ECE);
+                NS_LOG_DEBUG(TcpSocketState::EcnStateName[m_tcb->m_ecnState]
+                             << " -> ECN_SENDING_ECE");
+                m_tcb->m_ecnState = TcpSocketState::ECN_SENDING_ECE;
+        }
+        else
+        {
+        SendEmptyPacket(TcpHeader::ACK);            
+        }
 
         /* Check if we received an ECN SYN-ACK packet. Change the ECN state of sender to ECN_IDLE if
          * receiver has sent an ECN SYN-ACK packet and the  traffic is ECN Capable
