@@ -2823,6 +2823,13 @@ TcpSocketBase::SendEmptyPacket(uint8_t flags)
     }
 
     NS_ASSERT_MSG(packetType != TcpPacketType_t::INVALID, "Invalid TCP packet type");
+
+    if( packetType == TcpPacketType_t::SYN_ACK && m_tcb->m_useEcn != TcpSocketState::Off && 
+        m_tcb->m_ecnMode == TcpSocketState::EcnPlus)
+    {
+        m_tcb->m_ecnState = TcpSocketState::ECN_IDLE;
+    }
+
     AddSocketTags(p, IsEct(packetType));
 
     header.SetFlags(flags);
@@ -3126,7 +3133,7 @@ TcpSocketBase::AddSocketTags(const Ptr<Packet>& p, bool isEct) const
     }
     else
     {
-        if ((m_tcb->m_ecnState != TcpSocketState::ECN_DISABLED && p->GetSize() > 0 && isEct) ||
+        if ((m_tcb->m_ecnState != TcpSocketState::ECN_DISABLED && p->GetSize() >= 0 && isEct) ||
             m_tcb->m_ecnMode == TcpSocketState::DctcpEcn)
         {
             SocketIpTosTag ipTosTag;
@@ -3152,7 +3159,7 @@ TcpSocketBase::AddSocketTags(const Ptr<Packet>& p, bool isEct) const
     }
     else
     {
-        if ((m_tcb->m_ecnState != TcpSocketState::ECN_DISABLED && p->GetSize() > 0 && isEct) ||
+        if ((m_tcb->m_ecnState != TcpSocketState::ECN_DISABLED && p->GetSize() >= 0 && isEct) ||
             m_tcb->m_ecnMode == TcpSocketState::DctcpEcn)
         {
             SocketIpv6TclassTag ipTclassTag;
