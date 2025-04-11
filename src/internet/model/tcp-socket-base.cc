@@ -203,6 +203,14 @@ TcpSocketBase::GetTypeId()
                                           "On",
                                           TcpSocketState::AcceptOnly,
                                           "AcceptOnly"))
+            // New EcnMode attribute
+            .AddAttribute("EcnMode",
+                        "ECN mode for TCP socket",
+                        EnumValue(TcpSocketState::ClassicEcn), // Default value
+                        MakeEnumAccessor<TcpSocketState::EcnMode_t>(&TcpSocketBase::SetEcnMode),
+                        MakeEnumChecker(TcpSocketState::ClassicEcn, "ClassicEcn",
+                                        TcpSocketState::DctcpEcn, "DctcpEcn",
+                                        TcpSocketState::EcnPlus, "EcnPlus"))
             .AddTraceSource("RTO",
                             "Retransmission timeout",
                             MakeTraceSourceAccessor(&TcpSocketBase::m_rto),
@@ -4844,6 +4852,22 @@ TcpSocketBase::SetUseEcn(TcpSocketState::UseEcn_t useEcn)
 {
     NS_LOG_FUNCTION(this << useEcn);
     m_tcb->m_useEcn = useEcn;
+}
+
+void
+TcpSocketBase::SetEcnMode(TcpSocketState::EcnMode_t mode)
+{
+    NS_LOG_FUNCTION(this << static_cast<int>(mode));
+    NS_ASSERT(m_tcb != nullptr); // Ensure m_tcb is initialized
+    m_tcb->m_ecnMode = mode;
+}
+
+TcpSocketState::EcnMode_t
+TcpSocketBase::GetEcnMode() const
+{
+    NS_LOG_FUNCTION(this);
+    NS_ASSERT(m_tcb != nullptr); // Ensure m_tcb is initialized
+    return m_tcb->m_ecnMode;
 }
 
 uint32_t
