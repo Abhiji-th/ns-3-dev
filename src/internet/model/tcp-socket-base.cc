@@ -80,6 +80,15 @@ const std::map<std::pair<ns3::TcpSocketBase::TcpPacketType_t, ns3::TcpSocketStat
         {{ns3::TcpSocketBase::RST, ns3::TcpSocketState::DctcpEcn}, true},
         {{ns3::TcpSocketBase::RE_XMT, ns3::TcpSocketState::DctcpEcn}, true},
         {{ns3::TcpSocketBase::DATA, ns3::TcpSocketState::DctcpEcn}, true},
+
+        {{ns3::TcpSocketBase::SYN, ns3::TcpSocketState::EcnPlus}, false},
+        {{ns3::TcpSocketBase::SYN_ACK, ns3::TcpSocketState::EcnPlus}, true},
+        {{ns3::TcpSocketBase::PURE_ACK, ns3::TcpSocketState::EcnPlus}, false},
+        {{ns3::TcpSocketBase::WINDOW_PROBE, ns3::TcpSocketState::EcnPlus}, false},
+        {{ns3::TcpSocketBase::FIN, ns3::TcpSocketState::EcnPlus}, false},
+        {{ns3::TcpSocketBase::RST, ns3::TcpSocketState::EcnPlus}, false},
+        {{ns3::TcpSocketBase::RE_XMT, ns3::TcpSocketState::EcnPlus}, false},
+        {{ns3::TcpSocketBase::DATA, ns3::TcpSocketState::EcnPlus}, true},
     };
 } // namespace
 
@@ -904,7 +913,15 @@ TcpSocketBase::Send(Ptr<Packet> p, uint32_t flags)
             // to fill the buffer
             if (!m_sendPendingDataEvent.IsPending())
             {
-                Time delay = m_initialRtt.IsZero() ? TimeStep(1) : m_initialRtt;
+                Time delay;
+                if (m_tcb->m_useEcn != TcpSocketState::Off && m_tcb->m_ecnMode == TcpSocketState::EcnPlus)
+                {
+                    delay = m_initialRtt.IsZero() ? TimeStep(1) : m_initialRtt; // Delay with m_initialRtt if EcnPlus is enabled
+                }
+                else
+                {
+                    delay = TimeStep(1); // Default minimal delay if EcnPlus is disabled
+                }
                 NS_LOG_DEBUG("Scheduling SendPendingData with delay: " << delay);
                 m_sendPendingDataEvent = Simulator::Schedule(delay,
                                                             &TcpSocketBase::SendPendingData,
@@ -2366,7 +2383,19 @@ TcpSocketBase::ProcessSynSent(Ptr<Packet> packet, const TcpHeader& tcpHeader)
         m_txBuffer->SetHeadSequence(m_tcb->m_nextTxSequence);
         // Before sending packets, update the pacing rate based on RTT measurement so far
         UpdatePacingRate();
-        SendEmptyPacket(TcpHeader::ACK);
+
+        if ((m_tcb->m_useEcn != TcpSocketState::Off && m_tcb->m_ecnMode == TcpSocketState::EcnPlus) &&
+            (m_tcb->m_ecnState == TcpSocketState::ECN_CE_RCVD || m_tcb->m_ecnState == TcpSocketState::ECN_SENDING_ECE))
+        {
+                SendEmptyPacket(TcpHeader::ACK | TcpHeader::ECE);
+                NS_LOG_DEBUG(TcpSocketState::EcnStateName[m_tcb->m_ecnState]
+                             << " -> ECN_SENDING_ECE");
+                m_tcb->m_ecnState = TcpSocketState::ECN_SENDING_ECE;
+        }
+        else
+        {
+        SendEmptyPacket(TcpHeader::ACK);            
+        }
 
         /* Check if we received an ECN SYN-ACK packet. Change the ECN state of sender to ECN_IDLE if
          * receiver has sent an ECN SYN-ACK packet and the  traffic is ECN Capable
@@ -2816,6 +2845,13 @@ TcpSocketBase::SendEmptyPacket(uint8_t flags)
     }
 
     NS_ASSERT_MSG(packetType != TcpPacketType_t::INVALID, "Invalid TCP packet type");
+
+    if( packetType == TcpPacketType_t::SYN_ACK && m_tcb->m_useEcn != TcpSocketState::Off && 
+        m_tcb->m_ecnMode == TcpSocketState::EcnPlus)
+    {
+        m_tcb->m_ecnState = TcpSocketState::ECN_IDLE;
+    }
+
     AddSocketTags(p, IsEct(packetType));
 
     header.SetFlags(flags);
@@ -3119,7 +3155,7 @@ TcpSocketBase::AddSocketTags(const Ptr<Packet>& p, bool isEct) const
     }
     else
     {
-        if ((m_tcb->m_ecnState != TcpSocketState::ECN_DISABLED && p->GetSize() > 0 && isEct) ||
+        if ((m_tcb->m_ecnState != TcpSocketState::ECN_DISABLED && p->GetSize() >= 0 && isEct) ||
             m_tcb->m_ecnMode == TcpSocketState::DctcpEcn)
         {
             SocketIpTosTag ipTosTag;
@@ -3145,7 +3181,7 @@ TcpSocketBase::AddSocketTags(const Ptr<Packet>& p, bool isEct) const
     }
     else
     {
-        if ((m_tcb->m_ecnState != TcpSocketState::ECN_DISABLED && p->GetSize() > 0 && isEct) ||
+        if ((m_tcb->m_ecnState != TcpSocketState::ECN_DISABLED && p->GetSize() >= 0 && isEct) ||
             m_tcb->m_ecnMode == TcpSocketState::DctcpEcn)
         {
             SocketIpv6TclassTag ipTclassTag;
