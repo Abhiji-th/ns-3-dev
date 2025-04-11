@@ -1360,6 +1360,7 @@ class TcpSocketBase : public TcpSocket
 
     // Timeouts
     TracedValue<Time> m_rto;                 //!< Retransmit timeout
+    Time m_initialRtt{0};                    //!< Stores the initial RTT for use in scheduling delays
     Time m_minRto{Time::Max()};              //!< minimum value of the Retransmit timeout
     Time m_clockGranularity{Seconds(0.001)}; //!< Clock Granularity used in RTO calcs
     Time m_delAckTimeout;                    //!< Time to delay an ACK
