@@ -913,7 +913,15 @@ TcpSocketBase::Send(Ptr<Packet> p, uint32_t flags)
             // to fill the buffer
             if (!m_sendPendingDataEvent.IsPending())
             {
-                Time delay = m_initialRtt.IsZero() ? TimeStep(1) : m_initialRtt;
+                Time delay;
+                if (m_tcb->m_useEcn == TcpSocketState::On && m_tcb->m_ecnMode == TcpSocketState::EcnPlus)
+                {
+                    delay = m_initialRtt.IsZero() ? TimeStep(1) : m_initialRtt; // Delay with m_initialRtt if EcnPlus is enabled
+                }
+                else
+                {
+                    delay = TimeStep(1); // Default minimal delay if EcnPlus is disabled
+                }
                 NS_LOG_DEBUG("Scheduling SendPendingData with delay: " << delay);
                 m_sendPendingDataEvent = Simulator::Schedule(delay,
                                                             &TcpSocketBase::SendPendingData,
