@@ -904,17 +904,11 @@ TcpSocketBase::Send(Ptr<Packet> p, uint32_t flags)
             // to fill the buffer
             if (!m_sendPendingDataEvent.IsPending())
             {
-                // if (m_tcb->m_srtt.Get().IsZero()) // First packet
-                // {
-                //     m_sendPendingDataEvent = Simulator::Schedule(MilliSeconds(100),
-                //                                                  &TcpSocketBase::SendPendingData,
-                //                                                  this,
-                //                                                  m_connected);
-                // }
                 m_sendPendingDataEvent = Simulator::Schedule(TimeStep(1),
                                                              &TcpSocketBase::SendPendingData,
                                                              this,
                                                              m_connected);
+
             }
         }
         return p->GetSize();
