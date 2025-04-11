@@ -904,10 +904,12 @@ TcpSocketBase::Send(Ptr<Packet> p, uint32_t flags)
             // to fill the buffer
             if (!m_sendPendingDataEvent.IsPending())
             {
-                m_sendPendingDataEvent = Simulator::Schedule(TimeStep(1),
-                                                             &TcpSocketBase::SendPendingData,
-                                                             this,
-                                                             m_connected);
+                Time delay = m_initialRtt.IsZero() ? TimeStep(1) : m_initialRtt;
+                NS_LOG_DEBUG("Scheduling SendPendingData with delay: " << delay);
+                m_sendPendingDataEvent = Simulator::Schedule(delay,
+                                                            &TcpSocketBase::SendPendingData,
+                                                            this,
+                                                            m_connected);
             }
         }
         return p->GetSize();
@@ -3790,6 +3792,11 @@ TcpSocketBase::EstimateRtt(const TcpHeader& tcpHeader)
 
     if (!rtt.IsZero())
     {
+        if (m_tcb->m_srtt.Get().IsZero()) // Check for initial RTT
+        {
+            NS_LOG_DEBUG("Initial RTT: " << rtt);
+            m_initialRtt = rtt;
+        }
         m_rtt->Measurement(rtt); // Log the measurement
         // RFC 6298, clause 2.4
         m_rto = Max(m_rtt->GetEstimate() + Max(m_clockGranularity, m_rtt->GetVariation() * 4),
