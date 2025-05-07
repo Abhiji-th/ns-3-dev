@@ -1678,30 +1678,41 @@ TcpSocketBase::ReadOptions(const TcpHeader& tcpHeader, uint32_t* bytesSacked)
 // Sender should reduce the Congestion Window as a response to receiver's
 // ECN Echo notification only once per window
 void
-TcpSocketBase::EnterCwr(uint32_t currentDelivered)
+TcpSocketBase::EnterCwr(uint32_t currentDelivered, bool isSynAck)
 {
     NS_LOG_FUNCTION(this << currentDelivered);
-    m_tcb->m_ssThresh = m_congestionControl->GetSsThresh(m_tcb, BytesInFlight());
-    NS_LOG_DEBUG("Reduce ssThresh to " << m_tcb->m_ssThresh);
-    // Do not update m_cWnd, under assumption that recovery process will
-    // gradually bring it down to m_ssThresh.  Update the 'inflated' value of
-    // cWnd used for tracing, however.
-    m_tcb->m_cWndInfl = m_tcb->m_ssThresh;
-    NS_ASSERT(m_tcb->m_congState != TcpSocketState::CA_CWR);
-    NS_LOG_DEBUG(TcpSocketState::TcpCongStateName[m_tcb->m_congState] << " -> CA_CWR");
-    m_tcb->m_congState = TcpSocketState::CA_CWR;
-    // CWR state will be exited when the ack exceeds the m_recover variable.
-    // Do not set m_recoverActive (which applies to a loss-based recovery)
-    // m_recover corresponds to Linux tp->high_seq
-    m_recover = m_tcb->m_highTxMark;
-    if (!m_congestionControl->HasCongControl())
+    if ((m_tcb->m_ecnMode == TcpSocketState::EcnPlusNormal ||
+         m_tcb->m_ecnMode == TcpSocketState::EcnPlusWait) &&
+        isSynAck)
     {
-        // If there is a recovery algorithm, invoke it.
-        m_recoveryOps->EnterRecovery(m_tcb, m_dupAckCount, UnAckDataCount(), currentDelivered);
-        NS_LOG_INFO("Enter CWR recovery mode; set cwnd to " << m_tcb->m_cWnd << ", ssthresh to "
-                                                            << m_tcb->m_ssThresh << ", recover to "
-                                                            << m_recover);
+        m_tcb->m_ssThresh = 1;
     }
+    else
+    {
+        m_tcb->m_ssThresh = m_congestionControl->GetSsThresh(m_tcb, BytesInFlight());
+    }
+}
+
+NS_LOG_DEBUG("Reduce ssThresh to " << m_tcb->m_ssThresh);
+// Do not update m_cWnd, under assumption that recovery process will
+// gradually bring it down to m_ssThresh.  Update the 'inflated' value of
+// cWnd used for tracing, however.
+m_tcb->m_cWndInfl = m_tcb->m_ssThresh;
+NS_ASSERT(m_tcb->m_congState != TcpSocketState::CA_CWR);
+NS_LOG_DEBUG(TcpSocketState::TcpCongStateName[m_tcb->m_congState] << " -> CA_CWR");
+m_tcb->m_congState = TcpSocketState::CA_CWR;
+// CWR state will be exited when the ack exceeds the m_recover variable.
+// Do not set m_recoverActive (which applies to a loss-based recovery)
+// m_recover corresponds to Linux tp->high_seq
+m_recover = m_tcb->m_highTxMark;
+if (!m_congestionControl->HasCongControl())
+{
+    // If there is a recovery algorithm, invoke it.
+    m_recoveryOps->EnterRecovery(m_tcb, m_dupAckCount, UnAckDataCount(), currentDelivered);
+    NS_LOG_INFO("Enter CWR recovery mode; set cwnd to " << m_tcb->m_cWnd << ", ssthresh to "
+                                                        << m_tcb->m_ssThresh << ", recover to "
+                                                        << m_recover);
+}
 }
 
 void
@@ -1947,7 +1958,9 @@ TcpSocketBase::ReceivedAck(Ptr<Packet> packet, const TcpHeader& tcpHeader)
             m_tcb->m_ecnState = TcpSocketState::ECN_ECE_RCVD;
             if (m_tcb->m_congState != TcpSocketState::CA_CWR)
             {
-                EnterCwr(currentDelivered);
+                bool isSynAck = (tcpHeader.GetFlags() & (TcpHeader::SYN | TcpHeader::ACK)) ==
+                                (TcpHeader::SYN | TcpHeader::ACK);
+                EnterCwr(currentDelivered, isSynAck);
             }
         }
     }

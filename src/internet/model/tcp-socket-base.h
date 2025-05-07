@@ -1142,8 +1142,9 @@ class TcpSocketBase : public TcpSocket
      * @brief Enter CA_CWR state upon receipt of an ECN Echo
      *
      * @param currentDelivered Currently (S)ACKed bytes
+     * @param isSynAck whether the marked segment is a SYN-ACK or not
      */
-    void EnterCwr(uint32_t currentDelivered);
+    void EnterCwr(uint32_t currentDelivered, bool isSynAck);
 
     /**
      * @brief Enter the CA_RECOVERY, and retransmit the head
@@ -1359,9 +1360,9 @@ class TcpSocketBase : public TcpSocket
     uint32_t m_dataRetries{0};   //!< Number of data retransmission attempts
 
     // Timeouts
-    TracedValue<Time> m_rto;                 //!< Retransmit timeout
-    Time m_initialRtt{0};                    //!< Stores the initial RTT for use in scheduling delays
-    Time m_minRto{Time::Max()};              //!< minimum value of the Retransmit timeout
+    TracedValue<Time> m_rto;    //!< Retransmit timeout
+    Time m_initialRtt{0};       //!< Stores the initial RTT for use in scheduling delays
+    Time m_minRto{Time::Max()}; //!< minimum value of the Retransmit timeout
     Time m_clockGranularity{Seconds(0.001)}; //!< Clock Granularity used in RTO calcs
     Time m_delAckTimeout;                    //!< Time to delay an ACK
     Time m_persistTimeout;                   //!< Time between sending 1-byte probes
