@@ -81,14 +81,23 @@ const std::map<std::pair<ns3::TcpSocketBase::TcpPacketType_t, ns3::TcpSocketStat
         {{ns3::TcpSocketBase::RE_XMT, ns3::TcpSocketState::DctcpEcn}, true},
         {{ns3::TcpSocketBase::DATA, ns3::TcpSocketState::DctcpEcn}, true},
 
-        {{ns3::TcpSocketBase::SYN, ns3::TcpSocketState::EcnPlus}, false},
-        {{ns3::TcpSocketBase::SYN_ACK, ns3::TcpSocketState::EcnPlus}, true},
-        {{ns3::TcpSocketBase::PURE_ACK, ns3::TcpSocketState::EcnPlus}, false},
-        {{ns3::TcpSocketBase::WINDOW_PROBE, ns3::TcpSocketState::EcnPlus}, false},
-        {{ns3::TcpSocketBase::FIN, ns3::TcpSocketState::EcnPlus}, false},
-        {{ns3::TcpSocketBase::RST, ns3::TcpSocketState::EcnPlus}, false},
-        {{ns3::TcpSocketBase::RE_XMT, ns3::TcpSocketState::EcnPlus}, false},
-        {{ns3::TcpSocketBase::DATA, ns3::TcpSocketState::EcnPlus}, true},
+        {{ns3::TcpSocketBase::SYN, ns3::TcpSocketState::EcnPlusNormal}, true},
+        {{ns3::TcpSocketBase::SYN_ACK, ns3::TcpSocketState::EcnPlusNormal}, true},
+        {{ns3::TcpSocketBase::PURE_ACK, ns3::TcpSocketState::EcnPlusNormal}, false},
+        {{ns3::TcpSocketBase::WINDOW_PROBE, ns3::TcpSocketState::EcnPlusNormal}, false},
+        {{ns3::TcpSocketBase::FIN, ns3::TcpSocketState::EcnPlusNormal}, false},
+        {{ns3::TcpSocketBase::RST, ns3::TcpSocketState::EcnPlusNormal}, false},
+        {{ns3::TcpSocketBase::RE_XMT, ns3::TcpSocketState::EcnPlusNormal}, false},
+        {{ns3::TcpSocketBase::DATA, ns3::TcpSocketState::EcnPlusNormal}, true},
+
+        {{ns3::TcpSocketBase::SYN, ns3::TcpSocketState::EcnPlusWait}, true},
+        {{ns3::TcpSocketBase::SYN_ACK, ns3::TcpSocketState::EcnPlusWait}, true},
+        {{ns3::TcpSocketBase::PURE_ACK, ns3::TcpSocketState::EcnPlusWait}, false},
+        {{ns3::TcpSocketBase::WINDOW_PROBE, ns3::TcpSocketState::EcnPlusWait}, false},
+        {{ns3::TcpSocketBase::FIN, ns3::TcpSocketState::EcnPlusWait}, false},
+        {{ns3::TcpSocketBase::RST, ns3::TcpSocketState::EcnPlusWait}, false},
+        {{ns3::TcpSocketBase::RE_XMT, ns3::TcpSocketState::EcnPlusWait}, false},
+        {{ns3::TcpSocketBase::DATA, ns3::TcpSocketState::EcnPlusWait}, true},
     };
 } // namespace
 
@@ -914,19 +923,20 @@ TcpSocketBase::Send(Ptr<Packet> p, uint32_t flags)
             if (!m_sendPendingDataEvent.IsPending())
             {
                 Time delay;
-                if (m_tcb->m_useEcn != TcpSocketState::Off && m_tcb->m_ecnMode == TcpSocketState::EcnPlus)
+                if (m_tcb->m_useEcn != TcpSocketState::Off &&
+                    m_tcb->m_ecnMode == TcpSocketState::EcnPlusWait)
                 {
-                    delay = m_initialRtt.IsZero() ? TimeStep(1) : m_initialRtt; // Delay with m_initialRtt if EcnPlus is enabled
+                    delay = m_initialRtt.IsZero()
+                                ? TimeStep(1)
+                                : m_initialRtt; // Delay with m_initialRtt if EcnPlusWait is enabled
                 }
                 else
                 {
-                    delay = TimeStep(1); // Default minimal delay if EcnPlus is disabled
+                    delay = TimeStep(1); // Default minimal delay if EcnPlusWait is disabled
                 }
                 NS_LOG_DEBUG("Scheduling SendPendingData with delay: " << delay);
-                m_sendPendingDataEvent = Simulator::Schedule(delay,
-                                                            &TcpSocketBase::SendPendingData,
-                                                            this,
-                                                            m_connected);
+                m_sendPendingDataEvent =
+                    Simulator::Schedule(delay, &TcpSocketBase::SendPendingData, this, m_connected);
             }
         }
         return p->GetSize();
@@ -1243,10 +1253,13 @@ TcpSocketBase::ForwardUp(Ptr<Packet> packet,
         return;
     }
 
-    bool isSynAck = (tcpHeader.GetFlags() & (TcpHeader::SYN | TcpHeader::ACK)) == (TcpHeader::SYN | TcpHeader::ACK);
-    if ((header.GetEcn() == Ipv4Header::ECN_CE && m_ecnCESeq < tcpHeader.GetSequenceNumber())||
-        (header.GetEcn() == Ipv4Header::ECN_CE && isSynAck && m_tcb->m_useEcn != TcpSocketState::Off && 
-        m_tcb->m_ecnMode == TcpSocketState::EcnPlus))
+    bool isSynAck = (tcpHeader.GetFlags() & (TcpHeader::SYN | TcpHeader::ACK)) ==
+                    (TcpHeader::SYN | TcpHeader::ACK);
+    if ((header.GetEcn() == Ipv4Header::ECN_CE && m_ecnCESeq < tcpHeader.GetSequenceNumber()) ||
+        (header.GetEcn() == Ipv4Header::ECN_CE && isSynAck &&
+         m_tcb->m_useEcn != TcpSocketState::Off &&
+         (m_tcb->m_ecnMode == TcpSocketState::EcnPlusNormal ||
+          m_tcb->m_ecnMode == TcpSocketState::EcnPlusWait)))
     {
         NS_LOG_INFO("Received CE flag is valid");
         NS_LOG_DEBUG(TcpSocketState::EcnStateName[m_tcb->m_ecnState] << " -> ECN_CE_RCVD");
@@ -2387,17 +2400,19 @@ TcpSocketBase::ProcessSynSent(Ptr<Packet> packet, const TcpHeader& tcpHeader)
         // Before sending packets, update the pacing rate based on RTT measurement so far
         UpdatePacingRate();
 
-        if ((m_tcb->m_useEcn != TcpSocketState::Off && m_tcb->m_ecnMode == TcpSocketState::EcnPlus) &&
-            (m_tcb->m_ecnState == TcpSocketState::ECN_CE_RCVD || m_tcb->m_ecnState == TcpSocketState::ECN_SENDING_ECE))
+        if ((m_tcb->m_useEcn != TcpSocketState::Off &&
+             (m_tcb->m_ecnMode == TcpSocketState::EcnPlusNormal ||
+              m_tcb->m_ecnMode == TcpSocketState::EcnPlusWait)) &&
+            (m_tcb->m_ecnState == TcpSocketState::ECN_CE_RCVD ||
+             m_tcb->m_ecnState == TcpSocketState::ECN_SENDING_ECE))
         {
-                SendEmptyPacket(TcpHeader::ACK | TcpHeader::ECE);
-                NS_LOG_DEBUG(TcpSocketState::EcnStateName[m_tcb->m_ecnState]
-                             << " -> ECN_SENDING_ECE");
-                m_tcb->m_ecnState = TcpSocketState::ECN_SENDING_ECE;
+            SendEmptyPacket(TcpHeader::ACK | TcpHeader::ECE);
+            NS_LOG_DEBUG(TcpSocketState::EcnStateName[m_tcb->m_ecnState] << " -> ECN_SENDING_ECE");
+            m_tcb->m_ecnState = TcpSocketState::ECN_SENDING_ECE;
         }
         else
         {
-        SendEmptyPacket(TcpHeader::ACK);            
+            SendEmptyPacket(TcpHeader::ACK);
         }
 
         /* Check if we received an ECN SYN-ACK packet. Change the ECN state of sender to ECN_IDLE if
@@ -2849,8 +2864,9 @@ TcpSocketBase::SendEmptyPacket(uint8_t flags)
 
     NS_ASSERT_MSG(packetType != TcpPacketType_t::INVALID, "Invalid TCP packet type");
 
-    if( packetType == TcpPacketType_t::SYN_ACK && m_tcb->m_useEcn != TcpSocketState::Off && 
-        m_tcb->m_ecnMode == TcpSocketState::EcnPlus)
+    if (packetType == TcpPacketType_t::SYN_ACK && m_tcb->m_useEcn != TcpSocketState::Off &&
+        (m_tcb->m_ecnMode == TcpSocketState::EcnPlusNormal ||
+         m_tcb->m_ecnMode == TcpSocketState::EcnPlusWait))
     {
         m_tcb->m_ecnState = TcpSocketState::ECN_IDLE;
     }
